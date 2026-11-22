@@ -1,0 +1,14 @@
+{
+    "name": "mindcare-root",
+    "private": true,
+    "workspaces": [
+        "frontend",
+        "backend"
+    ],
+    "scripts": {
+        "build": "npm run build --workspace=backend",
+        "start": "npm run start --workspace=backend",
+        "start:backend": "npm run start --workspace=backend",
+        "start:frontend": "npm run start --workspace=frontend"
+    }
+}

@@ -1,0 +1,117 @@
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import morgan from 'morgan';
+import rateLimit from 'express-rate-limit';
+import passport from 'passport';
+import './config/passport';
+
+import authRoutes from './modules/auth/auth.routes';
+import userRoutes from './modules/users/user.routes';
+import helperRoutes from './modules/helpers/helper.routes';
+import adminRoutes from './modules/admins/admin.routes';
+import communityRoutes from './modules/community/post.routes';
+import chatRoutes from './modules/chat/chat.routes';
+import aiRoutes from './modules/ai/ai.routes';
+import assignmentRoutes from './modules/assignment/assignment.routes';
+import paymentRoutes from './modules/payment/payment.routes';
+import contactRoutes from './modules/contact/contact.routes';
+import notificationRoutes from './modules/notifications/notification.routes';
+
+import { errorHandler } from './utils/error';
+
+const app = express();
+app.set('trust proxy', 1);
+
+// Disable ETags so API endpoints always return 200 (never 304 Not Modified)
+app.set('etag', false);
+
+app.use(express.json());
+
+// ── Serve uploaded files BEFORE helmet so images load cross-origin from frontend ──
+app.use('/uploads', (req, res, next) => {
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    next();
+}, express.static('uploads', { etag: false }));
+
+const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:3002',
+    'https://mindcare-frontend.vercel.app',
+    'https://mindcare-frontend-tan.vercel.app'
+].filter(Boolean) as string[];
+
+app.use(cors({
+    origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control'],
+}));
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+app.use(morgan('dev'));
+app.use(passport.initialize());
+
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    message: 'Too many requests from this IP, please try again later.'
+});
+
+if (process.env.NODE_ENV === 'production') {
+    app.use(limiter);
+}
+
+// Health check endpoint
+app.get(['/health', '/healthy'], (req, res) => {
+    res.status(200).json({ status: 'ok', message: 'Server is running' });
+});
+
+// Root endpoint
+app.get('/', (req, res) => {
+    res.status(200).json({ 
+        message: 'MindCare Backend API', 
+        status: 'running',
+        version: '1.0.0',
+        endpoints: {
+            health: '/health',
+            auth: '/auth',
+            users: '/users',
+            ai: '/ai',
+            chat: '/chat'
+        }
+    });
+});
+
+app.use('/auth', authRoutes);
+app.use('/users', userRoutes);
+app.use('/helpers', helperRoutes);
+app.use('/admin', adminRoutes);
+app.use('/community', communityRoutes);
+app.use('/chat', chatRoutes);
+app.use('/ai', aiRoutes);
+app.use('/assignment', assignmentRoutes);
+app.use('/payment', paymentRoutes);
+app.use('/contact', contactRoutes);
+app.use('/notifications', notificationRoutes);
+
+// Catch-all route for undefined endpoints
+app.use((req, res) => {
+    res.status(404).json({ 
+        error: 'Route not found', 
+        message: `Cannot ${req.method} ${req.originalUrl}`,
+        availableRoutes: ['/auth', '/users', '/ai', '/chat', '/health']
+    });
+});
+
+app.use(errorHandler);
+
+export default app;
